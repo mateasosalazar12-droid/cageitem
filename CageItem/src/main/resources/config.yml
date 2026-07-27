@@ -1,0 +1,72 @@
+# =========================================================
+#  CageItem - Configuracion
+# =========================================================
+
+# ---------------------------------------------------------
+# Objeto especial. Puede ser cualquier item (espada, vara, etc).
+# El item se identifica de forma segura mediante PersistentDataContainer
+# (imposible de falsificar por un jugador), y visualmente mediante
+# el nombre, el lore y el custom-model-data configurados aqui.
+# ---------------------------------------------------------
+item:
+  material: DIAMOND_SWORD
+  name: "&c&lCage Blade"
+  lore:
+    - "&7Atrapa a tu enemigo"
+    - "&7en una jaula temporal."
+  # Custom Model Data usado para darle una textura/modelo distinto
+  # via resource pack. Puramente cosmetico, la validacion real es
+  # el PersistentDataContainer.
+  custom-model-data: 1001
+
+# ---------------------------------------------------------
+# Configuracion de la jaula generada.
+# ---------------------------------------------------------
+cage:
+  # Material con el que se construyen las paredes, techo y piso.
+  material: IRON_BARS
+  # Tamano del cubo (ancho x alto x profundidad). Debe ser >= 3.
+  # Si se configura un numero par, el plugin lo redondea al impar
+  # siguiente para poder centrarlo exactamente en la victima.
+  size: 5
+  # Duracion en segundos que la jaula permanece antes de restaurarse.
+  duration: 10
+
+# ---------------------------------------------------------
+# Cooldown de la habilidad, individual por jugador (en segundos).
+# ---------------------------------------------------------
+cooldown:
+  seconds: 30
+
+# ---------------------------------------------------------
+# Sonidos reproducidos al crear/quitar la jaula.
+# Deben ser nombres validos del enum org.bukkit.Sound.
+# ---------------------------------------------------------
+sounds:
+  cage-create: ENTITY_ENDER_DRAGON_GROWL
+  cage-remove: BLOCK_GLASS_BREAK
+
+# ---------------------------------------------------------
+# Particulas mostradas alrededor de la victima al activarse
+# la habilidad. "type" debe ser un valor valido de org.bukkit.Particle.
+# ---------------------------------------------------------
+particles:
+  type: PORTAL
+  count: 60
+
+# ---------------------------------------------------------
+# Mensajes. Soportan codigos de color con '&'.
+# Placeholders disponibles:
+#   {player} - nombre del jugador objetivo
+#   {time}   - segundos restantes de cooldown
+# ---------------------------------------------------------
+messages:
+  cooldown: "&cDebes esperar &e{time}&c segundos para volver a usar esta habilidad."
+  caged: "&c¡Has quedado atrapado en una jaula!"
+  cage-removed: "&aLa jaula ha desaparecido."
+  no-permission: "&cNo tienes permiso para usar este comando."
+  usage: "&cUso: /cageitem give <jugador>"
+  player-not-found: "&cJugador no encontrado o no esta conectado."
+  item-given: "&aLe diste el objeto especial a &e{player}&a."
+  item-received: "&a¡Has recibido el objeto especial de jaula!"
+  config-reloaded: "&aConfiguracion de CageItem recargada correctamente."

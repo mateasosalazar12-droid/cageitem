@@ -1,0 +1,17 @@
+name: CageItem
+version: '1.0.0'
+main: com.cageitem.plugin.Main
+api-version: '1.21'
+author: ClaudeAI
+description: 'Convierte un objeto especial en un arma que atrapa a la victima en una jaula temporal al golpearla.'
+
+commands:
+  cageitem:
+    description: Comando principal del plugin CageItem.
+    usage: '/cageitem give <jugador>'
+    permission: cageitem.admin
+
+permissions:
+  cageitem.admin:
+    description: Permite usar los comandos administrativos de CageItem (entregar el objeto especial, recargar configuracion).
+    default: op
