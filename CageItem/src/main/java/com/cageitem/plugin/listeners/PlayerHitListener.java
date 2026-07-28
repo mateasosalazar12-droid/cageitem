@@ -12,6 +12,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.Plugin;
 
 import java.util.UUID;
@@ -19,6 +20,9 @@ import java.util.UUID;
 /**
  * Detecta cuando un jugador golpea a otro con el objeto especial y, si la
  * habilidad esta disponible, dispara la creacion de la jaula.
+ * <p>
+ * Tambien se encarga de descontar un uso del objeto (si tiene usos
+ * limitados configurados) y de eliminarlo del inventario cuando se agotan.
  * <p>
  * Solo reacciona ante golpes jugador-contra-jugador: los golpes contra mobs
  * quedan intactos (el item sigue siendo un arma normal contra ellos).
@@ -82,9 +86,29 @@ public class PlayerHitListener implements Listener {
 
             cooldownManager.setCooldown(attackerId);
             cageManager.createCage(victim, attacker);
+
+            // Descuenta un uso del objeto; si se agoto, lo quitamos del inventario.
+            consumeItemUse(attacker, weapon);
         } catch (Exception ex) {
             // Cualquier error inesperado aqui no debe romper el combate normal del servidor.
             plugin.getLogger().warning("Error procesando golpe con CageItem: " + ex.getMessage());
+        }
+    }
+
+    private void consumeItemUse(Player attacker, ItemStack weapon) {
+        boolean depleted = itemUtils.consumeUse(weapon);
+        PlayerInventory inventory = attacker.getInventory();
+        if (depleted) {
+            ItemStack current = inventory.getItemInMainHand();
+            if (current.getAmount() <= 1) {
+                inventory.setItemInMainHand(null);
+            } else {
+                current.setAmount(current.getAmount() - 1);
+                inventory.setItemInMainHand(current);
+            }
+        } else {
+            // Persistimos el nuevo lore/contador de usos en el item que tiene en la mano.
+            inventory.setItemInMainHand(weapon);
         }
     }
 }

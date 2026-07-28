@@ -15,7 +15,7 @@ import java.util.List;
  */
 public class CageItemTabCompleter implements TabCompleter {
 
-    private static final List<String> SUBCOMMANDS = List.of("give", "reload");
+    private static final List<String> SUBCOMMANDS = List.of("give", "setitem", "setcooldown", "setuses", "reload");
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
@@ -35,6 +35,10 @@ public class CageItemTabCompleter implements TabCompleter {
                     suggestions.add(player.getName());
                 }
             }
+        } else if (args.length == 2 && args[0].equalsIgnoreCase("setcooldown")) {
+            suggestions.add("30");
+        } else if (args.length == 2 && args[0].equalsIgnoreCase("setuses")) {
+            suggestions.add("5");
         }
 
         return suggestions;

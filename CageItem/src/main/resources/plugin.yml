@@ -8,7 +8,7 @@ description: 'Convierte un objeto especial en un arma que atrapa a la victima en
 commands:
   cageitem:
     description: Comando principal del plugin CageItem.
-    usage: '/cageitem give <jugador>'
+    usage: '/cageitem <give|setitem|setcooldown|setuses|reload> ...'
     permission: cageitem.admin
 
 permissions:

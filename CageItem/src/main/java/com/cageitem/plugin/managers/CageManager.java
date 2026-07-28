@@ -24,6 +24,11 @@ import java.util.logging.Level;
  * durante el tiempo configurado y restaura exactamente el estado original
  * del mundo al finalizar (o al ser forzada su eliminacion).
  * <p>
+ * La jaula esta compuesta por 3 partes apiladas verticalmente: un piso
+ * solido, una seccion de rejas (hueca por dentro, donde queda encerrada
+ * la victima) y un techo solido. El piso y el techo pueden tener anchos
+ * distintos entre si, logrando un efecto "hongo" si se desea.
+ * <p>
  * Solo puede existir una jaula activa por victima a la vez (evita
  * duplicacion si el atacante logra golpear dos veces antes de que el
  * cooldown lo bloquee, o por cualquier condicion de carrera de eventos).
@@ -52,7 +57,36 @@ public class CageManager {
     }
 
     /**
-     * Crea una jaula 5x5x5 (o el tamano configurado) centrada en la victima.
+     * Calcula el rango [min, max] de un eje centrado en una coordenada,
+     * dado un ancho. Soporta anchos pares e impares.
+     */
+    private int[] computeBounds(int center, int size) {
+        int min = center - (size - 1) / 2;
+        int max = min + size - 1;
+        return new int[]{min, max};
+    }
+
+    /**
+     * Guarda el estado original del bloque, lo reemplaza por el material
+     * indicado y, si no es aire, lo marca como parte del "cascaron" solido
+     * de la jaula.
+     */
+    private void placeAndTrack(Block block, Material target, Map<Location, BlockState> saved, Set<Location> shell) {
+        Location loc = block.getLocation();
+        saved.put(loc, block.getState());
+        try {
+            // applyPhysics = false: evita actualizaciones en cascada mientras construimos la jaula.
+            block.setType(target, false);
+        } catch (Exception ex) {
+            plugin.getLogger().log(Level.WARNING, "No se pudo modificar el bloque en " + loc, ex);
+        }
+        if (target != Material.AIR) {
+            shell.add(loc);
+        }
+    }
+
+    /**
+     * Crea una jaula centrada en la victima segun el tamano configurado.
      * No hace nada si la victima ya esta atrapada en otra jaula, para evitar
      * duplicaciones y fugas de memoria por tareas superpuestas.
      */
@@ -62,56 +96,67 @@ public class CageManager {
         }
 
         World world = victim.getWorld();
-        int size = configManager.getCageSize();
-        int radius = (size - 1) / 2;
 
-        Location base = victim.getLocation();
-        int baseX = base.getBlockX();
-        int baseY = base.getBlockY();
-        int baseZ = base.getBlockZ();
+        int baseSize = configManager.getCageBaseSize();
+        int topSize = configManager.getCageTopSize();
+        int barsHeight = configManager.getCageBarsHeight();
+        Material baseMaterial = configManager.getCageBaseMaterial();
+        Material barsMaterial = configManager.getCageBarsMaterial();
 
-        int minX = baseX - radius;
-        int maxX = baseX + radius;
-        int minY = baseY - radius;
-        int maxY = baseY + radius;
-        int minZ = baseZ - radius;
-        int maxZ = baseZ + radius;
+        Location victimLoc = victim.getLocation();
+        int centerX = victimLoc.getBlockX();
+        int centerZ = victimLoc.getBlockZ();
+        int feetY = victimLoc.getBlockY();
 
-        Material cageMaterial = configManager.getCageMaterial();
+        int[] baseX = computeBounds(centerX, baseSize);
+        int[] baseZ = computeBounds(centerZ, baseSize);
+        int[] topX = computeBounds(centerX, topSize);
+        int[] topZ = computeBounds(centerZ, topSize);
+
+        int bottomY = feetY - 1;
+        int barsMinY = feetY;
+        int barsMaxY = feetY + barsHeight - 1;
+        int topY = barsMaxY + 1;
+
         Map<Location, BlockState> savedStates = new HashMap<>();
+        Set<Location> shellLocations = new HashSet<>();
 
-        // Recorremos todo el cubo: guardamos el estado ORIGINAL de cada bloque
-        // (incluyendo tile-entities como cofres/hornos) antes de tocar nada,
-        // para poder restaurarlo exactamente despues.
-        for (int x = minX; x <= maxX; x++) {
-            for (int y = minY; y <= maxY; y++) {
-                for (int z = minZ; z <= maxZ; z++) {
-                    Block block = world.getBlockAt(x, y, z);
-                    savedStates.put(block.getLocation(), block.getState());
+        // Piso solido.
+        for (int x = baseX[0]; x <= baseX[1]; x++) {
+            for (int z = baseZ[0]; z <= baseZ[1]; z++) {
+                placeAndTrack(world.getBlockAt(x, bottomY, z), baseMaterial, savedStates, shellLocations);
+            }
+        }
 
-                    boolean boundary = (x == minX || x == maxX || y == minY || y == maxY || z == minZ || z == maxZ);
-                    Material target = boundary ? cageMaterial : Material.AIR;
-
-                    try {
-                        // applyPhysics = false: evita que se disparen actualizaciones en cascada
-                        // (por ejemplo, arena/grava cayendo) mientras construimos la jaula.
-                        block.setType(target, false);
-                    } catch (Exception ex) {
-                        plugin.getLogger().log(Level.WARNING,
-                                "No se pudo modificar el bloque en " + x + "," + y + "," + z, ex);
-                    }
+        // Seccion de rejas: paredes en el perimetro del piso, hueco por dentro.
+        for (int y = barsMinY; y <= barsMaxY; y++) {
+            for (int x = baseX[0]; x <= baseX[1]; x++) {
+                for (int z = baseZ[0]; z <= baseZ[1]; z++) {
+                    boolean boundary = (x == baseX[0] || x == baseX[1] || z == baseZ[0] || z == baseZ[1]);
+                    Material target = boundary ? barsMaterial : Material.AIR;
+                    placeAndTrack(world.getBlockAt(x, y, z), target, savedStates, shellLocations);
                 }
             }
         }
 
-        // Nos aseguramos de que la victima quede fisicamente dentro del cubo hueco.
-        Location center = new Location(world, baseX + 0.5, minY + 1, baseZ + 0.5,
-                victim.getLocation().getYaw(), victim.getLocation().getPitch());
+        // Techo solido.
+        for (int x = topX[0]; x <= topX[1]; x++) {
+            for (int z = topZ[0]; z <= topZ[1]; z++) {
+                placeAndTrack(world.getBlockAt(x, topY, z), baseMaterial, savedStates, shellLocations);
+            }
+        }
+
+        // Nos aseguramos de que la victima quede fisicamente dentro del hueco interior.
+        Location center = new Location(world, centerX + 0.5, barsMinY, centerZ + 0.5,
+                victimLoc.getYaw(), victimLoc.getPitch());
         victim.teleport(center);
 
         CageData data = new CageData(
                 victim.getUniqueId(), attacker.getUniqueId(), world.getName(),
-                minX, maxX, minY, maxY, minZ, maxZ, savedStates
+                baseX[0], baseX[1], baseZ[0], baseZ[1],
+                topX[0], topX[1], topZ[0], topZ[1],
+                bottomY, barsMinY, barsMaxY, topY,
+                savedStates, shellLocations
         );
         activeCages.put(victim.getUniqueId(), data);
 
@@ -162,32 +207,25 @@ public class CageManager {
     }
 
     /**
-     * @return true si la ubicacion dada esta dentro del volumen de la jaula.
+     * @return true si la ubicacion dada esta dentro del hueco interior de la jaula.
      */
     public boolean isInsideCage(CageData data, Location location) {
         if (location.getWorld() == null) {
             return false;
         }
-        return data.contains(location.getWorld().getName(),
+        return data.isInsideInterior(location.getWorld().getName(),
                 location.getBlockX(), location.getBlockY(), location.getBlockZ());
     }
 
     /**
-     * Busca si la ubicacion dada corresponde a un bloque del "cascaron"
-     * (pared/techo/piso) de alguna jaula activa. Se usa para permitir que
+     * Busca si la ubicacion dada corresponde a un bloque solido (piso, techo
+     * o pared de rejas) de alguna jaula activa. Se usa para permitir que
      * otros jugadores rompan la jaula desde afuera, pero no la propia victima.
      */
     public CageData findCageByBoundaryBlock(Location location) {
-        if (location.getWorld() == null) {
-            return null;
-        }
-        String worldName = location.getWorld().getName();
-        int x = location.getBlockX();
-        int y = location.getBlockY();
-        int z = location.getBlockZ();
-
         for (CageData data : activeCages.values()) {
-            if (data.contains(worldName, x, y, z) && data.isBoundary(x, y, z)) {
+            if (data.getWorldName().equals(location.getWorld() != null ? location.getWorld().getName() : null)
+                    && data.isShellBlock(location)) {
                 return data;
             }
         }

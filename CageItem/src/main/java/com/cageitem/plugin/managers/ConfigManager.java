@@ -12,6 +12,11 @@ import java.util.logging.Level;
 /**
  * Carga y expone todos los valores definidos en config.yml.
  * <p>
+ * Ademas de leer, tambien permite modificar y persistir en disco algunos
+ * valores en caliente (material del item, cooldown, usos), usados por los
+ * subcomandos de /cageitem para configurar el plugin sin editar el archivo
+ * manualmente.
+ * <p>
  * Cualquier valor invalido (material, sonido o particula mal escrita)
  * se registra como advertencia en consola y se reemplaza por un valor
  * por defecto seguro, para que un error de tipeo en el config nunca
@@ -26,10 +31,14 @@ public class ConfigManager {
     private String itemName;
     private List<String> itemLore;
     private int customModelData;
+    private int itemMaxUses;
 
     // Jaula
-    private Material cageMaterial;
-    private int cageSize;
+    private int cageBaseSize;
+    private int cageTopSize;
+    private int cageBarsHeight;
+    private Material cageBaseMaterial;
+    private Material cageBarsMaterial;
     private int cageDuration;
 
     // Cooldown
@@ -53,6 +62,11 @@ public class ConfigManager {
     private String msgItemGiven;
     private String msgItemReceived;
     private String msgConfigReloaded;
+    private String msgItemMaterialSet;
+    private String msgItemMaterialNeedHand;
+    private String msgCooldownSet;
+    private String msgUsesSet;
+    private String msgInvalidNumber;
 
     public ConfigManager(Main plugin) {
         this.plugin = plugin;
@@ -69,14 +83,13 @@ public class ConfigManager {
         itemName = cfg.getString("item.name", "&c&lCage Blade");
         itemLore = cfg.getStringList("item.lore");
         customModelData = cfg.getInt("item.custom-model-data", 1001);
+        itemMaxUses = cfg.getInt("item.max-uses", 5);
 
-        cageMaterial = parseMaterial(cfg.getString("cage.material", "IRON_BARS"), Material.IRON_BARS);
-        int rawSize = cfg.getInt("cage.size", 5);
-        cageSize = Math.max(3, rawSize);
-        if (cageSize % 2 == 0) {
-            // Necesitamos un tamano impar para poder centrar la jaula exactamente en la victima.
-            cageSize++;
-        }
+        cageBaseSize = Math.max(3, cfg.getInt("cage.base-size", 3));
+        cageTopSize = Math.max(3, cfg.getInt("cage.top-size", 3));
+        cageBarsHeight = Math.max(1, cfg.getInt("cage.bars-height", 3));
+        cageBaseMaterial = parseMaterial(cfg.getString("cage.base-material", "STONE"), Material.STONE);
+        cageBarsMaterial = parseMaterial(cfg.getString("cage.bars-material", "IRON_BARS"), Material.IRON_BARS);
         cageDuration = Math.max(1, cfg.getInt("cage.duration", 10));
 
         cooldownSeconds = Math.max(0, cfg.getInt("cooldown.seconds", 30));
@@ -91,11 +104,39 @@ public class ConfigManager {
         msgCaged = cfg.getString("messages.caged", "&c¡Has quedado atrapado en una jaula!");
         msgCageRemoved = cfg.getString("messages.cage-removed", "&aLa jaula ha desaparecido.");
         msgNoPermission = cfg.getString("messages.no-permission", "&cNo tienes permiso para usar este comando.");
-        msgUsage = cfg.getString("messages.usage", "&cUso: /cageitem give <jugador>");
+        msgUsage = cfg.getString("messages.usage", "&cUso: /cageitem <give|setitem|setcooldown|setuses|reload> ...");
         msgPlayerNotFound = cfg.getString("messages.player-not-found", "&cJugador no encontrado.");
         msgItemGiven = cfg.getString("messages.item-given", "&aLe diste el objeto especial a {player}.");
         msgItemReceived = cfg.getString("messages.item-received", "&a¡Has recibido el objeto especial!");
         msgConfigReloaded = cfg.getString("messages.config-reloaded", "&aConfiguracion recargada.");
+        msgItemMaterialSet = cfg.getString("messages.item-material-set", "&aEl objeto especial ahora usa el material &e{material}&a.");
+        msgItemMaterialNeedHand = cfg.getString("messages.item-material-need-hand", "&cDebes tener un item en la mano.");
+        msgCooldownSet = cfg.getString("messages.cooldown-set", "&aCooldown actualizado a &e{seconds}&a segundos.");
+        msgUsesSet = cfg.getString("messages.uses-set", "&aUsos del objeto actualizados a &e{uses}&a.");
+        msgInvalidNumber = cfg.getString("messages.invalid-number", "&cDebes indicar un numero valido.");
+    }
+
+    // ---------------------------------------------------------------
+    // Setters que persisten el cambio en config.yml y recargan en caliente.
+    // Usados por los subcomandos administrativos de /cageitem.
+    // ---------------------------------------------------------------
+
+    public void setItemMaterial(Material material) {
+        plugin.getConfig().set("item.material", material.name());
+        plugin.saveConfig();
+        load();
+    }
+
+    public void setCooldownSeconds(int seconds) {
+        plugin.getConfig().set("cooldown.seconds", Math.max(0, seconds));
+        plugin.saveConfig();
+        load();
+    }
+
+    public void setMaxUses(int uses) {
+        plugin.getConfig().set("item.max-uses", Math.max(0, uses));
+        plugin.saveConfig();
+        load();
     }
 
     private Material parseMaterial(String raw, Material fallback) {
@@ -144,12 +185,28 @@ public class ConfigManager {
         return customModelData;
     }
 
-    public Material getCageMaterial() {
-        return cageMaterial;
+    public int getItemMaxUses() {
+        return itemMaxUses;
     }
 
-    public int getCageSize() {
-        return cageSize;
+    public int getCageBaseSize() {
+        return cageBaseSize;
+    }
+
+    public int getCageTopSize() {
+        return cageTopSize;
+    }
+
+    public int getCageBarsHeight() {
+        return cageBarsHeight;
+    }
+
+    public Material getCageBaseMaterial() {
+        return cageBaseMaterial;
+    }
+
+    public Material getCageBarsMaterial() {
+        return cageBarsMaterial;
     }
 
     public int getCageDuration() {
@@ -210,5 +267,25 @@ public class ConfigManager {
 
     public String getMsgConfigReloaded() {
         return msgConfigReloaded;
+    }
+
+    public String getMsgItemMaterialSet() {
+        return msgItemMaterialSet;
+    }
+
+    public String getMsgItemMaterialNeedHand() {
+        return msgItemMaterialNeedHand;
+    }
+
+    public String getMsgCooldownSet() {
+        return msgCooldownSet;
+    }
+
+    public String getMsgUsesSet() {
+        return msgUsesSet;
+    }
+
+    public String getMsgInvalidNumber() {
+        return msgInvalidNumber;
     }
 }

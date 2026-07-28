@@ -7,6 +7,10 @@
 # El item se identifica de forma segura mediante PersistentDataContainer
 # (imposible de falsificar por un jugador), y visualmente mediante
 # el nombre, el lore y el custom-model-data configurados aqui.
+#
+# Puedes cambiar el material de dos formas:
+#   1. Editando "material" aqui abajo.
+#   2. En el juego: sostenlo en la mano y usa /cageitem setitem
 # ---------------------------------------------------------
 item:
   material: DIAMOND_SWORD
@@ -14,26 +18,42 @@ item:
   lore:
     - "&7Atrapa a tu enemigo"
     - "&7en una jaula temporal."
+    - "&7Usos restantes: &e{uses}"
   # Custom Model Data usado para darle una textura/modelo distinto
   # via resource pack. Puramente cosmetico, la validacion real es
   # el PersistentDataContainer.
   custom-model-data: 1001
+  # Cantidad de veces que se puede usar el objeto antes de que
+  # desaparezca. 0 (o un numero negativo) = usos ilimitados.
+  # Tambien se puede cambiar en el juego con /cageitem setuses <cantidad>
+  max-uses: 5
 
 # ---------------------------------------------------------
 # Configuracion de la jaula generada.
+# La jaula tiene 3 partes apiladas verticalmente:
+#   - Un piso solido (base-size x base-size)
+#   - Una seccion de rejas (misma base, altura bars-height)
+#   - Un techo solido (top-size x top-size)
+# Puedes usar distintos numeros de piso/techo para lograr el
+# efecto "hongo" (por ejemplo piso y techo mas anchos que las rejas).
 # ---------------------------------------------------------
 cage:
-  # Material con el que se construyen las paredes, techo y piso.
-  material: IRON_BARS
-  # Tamano del cubo (ancho x alto x profundidad). Debe ser >= 3.
-  # Si se configura un numero par, el plugin lo redondea al impar
-  # siguiente para poder centrarlo exactamente en la victima.
-  size: 5
+  # Ancho (X/Z) del piso solido de la jaula. Minimo 3.
+  base-size: 3
+  # Ancho (X/Z) del techo solido de la jaula. Minimo 3.
+  top-size: 3
+  # Altura de la seccion de rejas (donde queda encerrada la victima).
+  bars-height: 3
+  # Material del piso y del techo.
+  base-material: STONE
+  # Material de las paredes (rejas).
+  bars-material: IRON_BARS
   # Duracion en segundos que la jaula permanece antes de restaurarse.
   duration: 10
 
 # ---------------------------------------------------------
 # Cooldown de la habilidad, individual por jugador (en segundos).
+# Tambien se puede cambiar en el juego con /cageitem setcooldown <segundos>
 # ---------------------------------------------------------
 cooldown:
   seconds: 30
@@ -56,17 +76,25 @@ particles:
 
 # ---------------------------------------------------------
 # Mensajes. Soportan codigos de color con '&'.
-# Placeholders disponibles:
-#   {player} - nombre del jugador objetivo
-#   {time}   - segundos restantes de cooldown
+# Placeholders disponibles segun el mensaje:
+#   {player}    - nombre del jugador objetivo
+#   {time}      - segundos restantes de cooldown
+#   {material}  - material del objeto especial
+#   {seconds}   - segundos configurados de cooldown
+#   {uses}      - usos configurados del objeto
 # ---------------------------------------------------------
 messages:
   cooldown: "&cDebes esperar &e{time}&c segundos para volver a usar esta habilidad."
   caged: "&c¡Has quedado atrapado en una jaula!"
   cage-removed: "&aLa jaula ha desaparecido."
   no-permission: "&cNo tienes permiso para usar este comando."
-  usage: "&cUso: /cageitem give <jugador>"
+  usage: "&cUso: /cageitem <give|setitem|setcooldown|setuses|reload> ..."
   player-not-found: "&cJugador no encontrado o no esta conectado."
   item-given: "&aLe diste el objeto especial a &e{player}&a."
   item-received: "&a¡Has recibido el objeto especial de jaula!"
   config-reloaded: "&aConfiguracion de CageItem recargada correctamente."
+  item-material-set: "&aEl objeto especial ahora usa el material &e{material}&a."
+  item-material-need-hand: "&cDebes tener un item en la mano para usarlo como objeto especial."
+  cooldown-set: "&aCooldown actualizado a &e{seconds}&a segundos."
+  uses-set: "&aUsos del objeto actualizados a &e{uses}&a (0 = ilimitado)."
+  invalid-number: "&cDebes indicar un numero valido."

@@ -13,8 +13,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Encargada de crear el objeto especial de la jaula y de verificar si un
- * ItemStack cualquiera es (o no) ese objeto.
+ * Encargada de crear el objeto especial de la jaula, verificar si un
+ * ItemStack cualquiera es (o no) ese objeto, y gestionar sus usos limitados.
  * <p>
  * La verificacion se basa PRINCIPALMENTE en el {@link org.bukkit.persistence.PersistentDataContainer},
  * ya que es el unico dato que un jugador no puede falsificar creando un
@@ -25,10 +25,12 @@ public class ItemUtils {
 
     private final ConfigManager configManager;
     private final NamespacedKey cageItemKey;
+    private final NamespacedKey usesKey;
 
     public ItemUtils(Plugin plugin, ConfigManager configManager) {
         this.configManager = configManager;
         this.cageItemKey = new NamespacedKey(plugin, "cage_item");
+        this.usesKey = new NamespacedKey(plugin, "cage_uses");
     }
 
     /**
@@ -43,16 +45,19 @@ public class ItemUtils {
                     .decoration(TextDecoration.ITALIC, false);
             meta.displayName(name);
 
-            List<Component> lore = new ArrayList<>();
-            for (String line : configManager.getItemLore()) {
-                lore.add(MessageUtils.colorize(line).decoration(TextDecoration.ITALIC, false));
-            }
-            meta.lore(lore);
+            int maxUses = configManager.getItemMaxUses();
+            meta.lore(buildLore(maxUses > 0 ? maxUses : -1));
 
             meta.setCustomModelData(configManager.getCustomModelData());
 
             // Marca de autenticidad: imposible de falsificar sin acceso al plugin.
             meta.getPersistentDataContainer().set(cageItemKey, PersistentDataType.BYTE, (byte) 1);
+
+            // Solo guardamos el contador de usos si hay un limite configurado;
+            // su ausencia se interpreta como usos ilimitados.
+            if (maxUses > 0) {
+                meta.getPersistentDataContainer().set(usesKey, PersistentDataType.INTEGER, maxUses);
+            }
 
             item.setItemMeta(meta);
         }
@@ -73,5 +78,53 @@ public class ItemUtils {
         }
         Byte marker = meta.getPersistentDataContainer().get(cageItemKey, PersistentDataType.BYTE);
         return marker != null && marker == (byte) 1;
+    }
+
+    /**
+     * Consume un uso del objeto especial dado, actualizando su lore y su
+     * contador interno de usos restantes.
+     *
+     * @return true si el objeto se quedo sin usos y debe eliminarse del
+     * inventario del jugador; false si sigue teniendo usos (o son ilimitados).
+     */
+    public boolean consumeUse(ItemStack item) {
+        if (item == null) {
+            return false;
+        }
+        ItemMeta meta = item.getItemMeta();
+        if (meta == null) {
+            return false;
+        }
+
+        Integer current = meta.getPersistentDataContainer().get(usesKey, PersistentDataType.INTEGER);
+        if (current == null) {
+            // Sin contador guardado = usos ilimitados, no hay nada que hacer.
+            return false;
+        }
+
+        int remaining = current - 1;
+        if (remaining <= 0) {
+            // Se agotaron los usos: el llamador debe quitar el item del inventario.
+            return true;
+        }
+
+        meta.getPersistentDataContainer().set(usesKey, PersistentDataType.INTEGER, remaining);
+        meta.lore(buildLore(remaining));
+        item.setItemMeta(meta);
+        return false;
+    }
+
+    /**
+     * Construye el lore del objeto reemplazando el placeholder {uses} por
+     * el numero de usos restantes (o el simbolo de infinito si es -1).
+     */
+    private List<Component> buildLore(int remainingUses) {
+        String usesDisplay = remainingUses < 0 ? "∞" : String.valueOf(remainingUses);
+        List<Component> lore = new ArrayList<>();
+        for (String line : configManager.getItemLore()) {
+            String replaced = line.replace("{uses}", usesDisplay);
+            lore.add(MessageUtils.colorize(replaced).decoration(TextDecoration.ITALIC, false));
+        }
+        return lore;
     }
 }
